@@ -1,0 +1,79 @@
+<h2>There's a blog for that</h2>
+<p>A somewhat common complaint I've heard from organizations I've worked with is that folks within the organization frequently are unaware of press releases, blogs, or other information the organization is publicly sharing. In fact, I'm guilty of it as well. On numerous occasions, I've gone to a coworker for some quick troubleshooting only to be told &quot;I wrote a blog for that&quot;.</p>
+<p>Now that Microsoft Viva Connections is here, I've been putting a lot of energy into my company's SharePoint home site and trying to come up with ways to break down the information silo's we've just naturally accrued over the years.</p>
+<p>Fortunately, it turned out that our company blog already had an RSS feed setup, which opened up some opportunities, one of which was to create a flow in Power Automate that automatically creates a SharePoint &quot;News Link&quot; in our home site whenever a new blog post is published to our public site.</p>
+<p>So, with this blog, we'll walk through the steps used to accomplish that feat.</p>
+<p><img src="images/FlowOverview.png" alt="FlowOverview.png"></p>
+<h2>Triggered</h2>
+<p>As with any flow, we need something to kick things off. I was afraid that this was going to be the biggest technical challenge but, thankfully, it turns out that there is a trigger purpose built to do exactly what we need: the <strong>When a feed item is published</strong> trigger!</p>
+<p><img src="images/1-trigger.png" alt="1-trigger.png"></p>
+<p>As you can see, the configuration here is dead simple. You simply provide it the URL to an RSS feed and select either the <strong>PublishDate</strong> or <strong>UpdatedOn</strong> values. We'll stick with the default <strong>PublishDate</strong> setting so that we're only being triggered by brand new articles.</p>
+<p>So, with this configuration, our flow will be executed anytime a new article is published to the XBOX news RSS feed.</p>
+<p>Once triggered, seemingly regardless of the specific RSS feeds schema, a standardized JSON object is returned to the flow that gives us <em>most</em> of what we need.</p>
+<pre><code class="language-JSON">{
+    &quot;body&quot;: {
+        &quot;id&quot;: &quot;https://news.xbox.com/en-us/?p=152438&quot;,
+        &quot;title&quot;: &quot;Wasteland 3: The Battle of Steeltown Releasing June 3 &quot;,
+        &quot;primaryLink&quot;: &quot;https://news.xbox.com/en-us/2021/04/15/wasteland-3-the-battle-of-steeltown-releasing-june-3/&quot;,
+        &quot;links&quot;: [
+            &quot;https://news.xbox.com/en-us/2021/04/15/wasteland-3-the-battle-of-steeltown-releasing-june-3/&quot;
+        ],
+        &quot;updatedOn&quot;: &quot;0001-01-01 00:00:00Z&quot;,
+        &quot;publishDate&quot;: &quot;2021-04-15 14:00:00Z&quot;,
+        &quot;summary&quot;: &quot;The Wasteland 3 team here at inXile is very excited to announce the first narrative expansion for Wasteland 3: The Battle of Steeltown will be releasing June 3. Since the game’s launch last August, we’ve been working on adding new features, quality of life changes, and fixing bugs and improving game stability and performance. But [&amp;#8230;]&quot;,
+        &quot;copyright&quot;: &quot;&quot;,
+        &quot;categories&quot;: []
+    }
+}
+</code></pre><br/>
+<p>Even better, this data gets turned into variables we can access through the <em>Dynamic Content</em> selector in Power Automate.</p>
+<p><img src="images/1-blog-properties.png" alt="1-blog-properties.png"></p>
+<h2>Take a picture, it'll last longer</h2>
+<p>One thing we don't get is any sort of image to show, which is a bummer because without them, all of our News Links would end up looking like the below image.</p>
+<p><img src="images/3-blog-no-image.png" alt="3-blog-no-image.png"></p>
+<p>Thankfully, SharePoint has a handy-dandy little service hidden away that can help.</p>
+<p>If you ever created a new &quot;News Link&quot;, you'll know that you simply give SharePoint the URL to your article and it auto-magically snags the title, summary and a thumbnail image to use. If you open up your browser's developer tools, you can see that SharePoint calls this <code>_api/SP.Publishing.EmbedService/EmbedData</code> endpoint, passing along an encoded URL and some additional query strings. It turns out that this is what handles all that 'magic' and it's also something we can leverage for our own ends here!</p>
+<p>Thanks to the output of our trigger, we know the URL of the blog post we're working with, and we can access it through the <img src="images/5-primaryfeedlink.png" alt="'Primary Feed Link'"> variable. However, we do need to make sure that the URL is in the right format, so we'll create our own variable to make it so.</p>
+<p><img src="images/4-primarylinkencoded.png" alt="4-primarylinkencoded.png"></p>
+<p>We'll call it <em>PrimaryLinkEncoded</em>, make it a string, and initialize its value using the following expression: <code>concat('%27',encodeUriComponent(triggerOutputs()?['body/primaryLink']),'%27')</code></p>
+<p>Once run, we'll end up with an encoded URL surrounded by apostrophes, which is what the <code>EmbedData</code> service expects.</p>
+<p>Now that we have that we just need to call the aforementioned service using the <strong>Send an HTTP request to SharePoint</strong> action.</p>
+<p><img src="images/6-getthumbnail.png" alt="6-getthumbnail.png"></p>
+<p>We'll be making a GET request to the root of our SharePoint site. Technically, this could be any SharePoint site you have access to, but since we'll be posting news articles to our home site, we'll just stick with that.</p>
+<p>For the Uri configuration, we're calling the previously mentioned service with a few <strong>required</strong> query string parameters like so: <code>_api/SP.Publishing.EmbedService/EmbedData?url=@{variables('PrimaryLinkEncoded')}&amp;version=1&amp;bannerImageUrl=true</code></p>
+<p>We're passing along the encoded URL we created in the last step, specifying version 1 (which is required, despite their only being one version) and we're asking for the <em>bannerImageUrl</em> to be included (otherwise we're not getting )</p>
+<p>We only need to include one header, the <code>accept</code> header, with a value of <code>application/json;odata.metadata=minimal</code>.</p>
+<p>Finally, to make things a bit easier to use in a moment, we'll capture the output of this request into a variable using the <code>Initialize Variable</code> action again, like so.</p>
+<p><img src="images/7-BannerImageUrl.png" alt="7-BannerImageUrl.png"></p>
+<p>We're creating a new string variable named <strong>BannerImageUrl</strong> and we're setting its value using the following expression: <code>outputs('Get_Thumbnail')?['body']?['d']?['ThumbnailUrl']</code></p>
+<h2>Compose yourself</h2>
+<p>Now that we've got just about everything we can get, we need to put into the format that SharePoint expects when creating a News Link item, so it's time to prepare our payload using the <code>Compose</code> action.</p>
+<p><img src="images/8-compose.png" alt="8-compose.png"></p>
+<p>It's a fairly simply and (mostly) self-explanatory bit of JSON, so we won't dwell on it much. Below is the exact JSON used in the above screenshot.</p>
+<pre><code class="language-JSON">{
+  &quot;BannerImageUrl&quot;: @{variables('BannerImageUrl')},
+  &quot;Description&quot;: @{triggerOutputs()?['body/summary']},
+  &quot;IsBannerImageUrlExternal&quot;: true,
+  &quot;OriginalSourceUrl&quot;: @{triggerOutputs()?['body/primaryLink']},
+  &quot;ShouldSaveAsDraft&quot;: false,
+  &quot;Title&quot;: @{triggerOutputs()?['body/title']},
+  &quot;__metadata&quot;: {
+    &quot;type&quot;: &quot;SP.Publishing.RepostPage&quot;
+  }
+}
+</code></pre><br/>
+<h2>Spread the word</h2>
+<p>The only thing left to do now is make our post, which will do by using another <strong>Send an HTTP request to SharePoint</strong> action, shown below.</p>
+<p><img src="images/9-post.png" alt="9-post.png"></p>
+<p>This time, we'll be making a POST to the <code>_api/sitepages/pages/reposts</code> endpoint (which is what SharePoint does when you post a news link).</p>
+<p>Our headers are only slightly more involved. Our endpoint is expecting to receive and will return JSON, so we need to include the appropriate headers...</p>
+<pre><code class="language-JSON">{
+  &quot;accept&quot;: &quot;application/json&quot;,
+  &quot;content-type&quot;: &quot;application/json;odata=verbose;charset=utf-8&quot;
+}
+</code></pre><br/>
+<p>Last but not least, we need to include the <strong>Output</strong> of the compose action we created in the previous step so that SharePoint knows what we're sharing.</p>
+<p>Once that's all setup, go ahead and save.</p>
+<h2>Wrapping up</h2>
+<p>At this point, you're done developing. The only thing left to do is wait, really. Once new items are published to the RSS feed, you'll eventually see them start showing up in your News web parts!</p>
+<p><img src="images/10-done.png" alt="10-done.png"></p>

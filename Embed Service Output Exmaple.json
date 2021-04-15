@@ -1,0 +1,25 @@
+{
+    "statusCode": 200,
+    "body": {
+        "d": {
+            "AllowHttpsEmbed": false,
+            "CreatorName": "",
+            "DatePublishedAt": "",
+            "Description": "Introducing the Season One Arms Dealer Update, the newest addition to the first season of Rogue Company! In the Arms Dealer event, all Rogue Company players will be able to access all new Arms Dealer missions, featuring a variety of objectives which …",
+            "EmbedServiceResponseCode": 200,
+            "ErrorMessage": null,
+            "Html": "",
+            "ListId": "",
+            "PublisherName": "",
+            "ResponseCode": 0,
+            "SiteId": "",
+            "ThumbnailUrl": "https://news.xbox.com/en-us/wp-content/uploads/sites/2/2021/04/RoCo-ArmsDealerEvent-1920x1080_AP.jpg?fit=1920%2C1080",
+            "Title": "Introducing the Rogue Company Season One Event - Xbox Wire",
+            "Type": "rich",
+            "UniqueId": "",
+            "Url": "https://news.xbox.com/en-us/2021/04/15/introducing-the-rogue-company-season-one-event/",
+            "VideoId": null,
+            "WebId": ""
+        }
+    }
+}
